@@ -20,6 +20,8 @@ dev = ["pytest", "mypy", "ruff"]
 
 [project.scripts]
 nano-dsl = "nano_logic.dashboard:main"
+nano-agent = "nano_logic.agent:main"
+nano-receiver = "nano_logic.receiver:main"
 
 [tool.setuptools.packages.find]
 include = ["nano_logic*"]

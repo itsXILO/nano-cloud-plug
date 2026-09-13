@@ -4,8 +4,9 @@ A lightweight terminal-based system monitoring dashboard with a custom DSL for q
 
 ## Features
 
-- **Custom DSL**: Query various system metrics (CPU, Memory, Disk, Network, Sensors, Docker, Services) with simple, intuitive commands.
-- **40+ DSL Commands**: 10 metric categories covering CPU, Memory, Disk, GPU, Processes, Network, System, Sensors, Docker, and Services.
+- **Custom DSL**: Query various system metrics (CPU, Memory, Disk, Network, Sensors, Docker, Services, EC2/Cloud) with simple, intuitive commands.
+- **45+ DSL Commands**: 11 metric categories covering CPU, Memory, Disk, GPU, Processes, Network, System, Sensors, Docker, Services, and EC2/Cloud.
+- **EC2 & Remote Node Monitoring**: Deploy a lightweight agent on EC2 instances that pushes live telemetry to a central receiver. Query remote metrics with `ec2.list`, `ec2.metrics`, `ec2.info`, and set alerts like `alert ec2.cpu.util > 80 -> webhook`.
 - **Alert Rules Management**: Set up custom rules to monitor system metrics dynamically. Name your rules, assign thresholds, and easily stop them when no longer needed.
 - **Full Operator Support**: Alert operators include `>`, `<`, `==`, `>=`, `<=` for flexible threshold conditions.
 - **Rule Persistence & Background Daemon**: Alert rules are automatically saved (`rules.json` in the XDG state directory) and monitored by an independent, invisible background daemon. Your alerts keep running and logging even after you close the dashboard!
@@ -14,7 +15,7 @@ A lightweight terminal-based system monitoring dashboard with a custom DSL for q
 - **Command History**: Cycle through previously used commands using the Up and Down arrow keys.
 - **Active Rules Panel**: Dedicated UI component to monitor all running alerts at a glance.
 - **Utility Commands**: Built-in `help`, `rules`, `status`, `clear`, `history`, and `guide` commands for easier navigation.
-- **Comprehensive Test Suite**: 155+ tests covering all commands, edge cases, and the rule engine.
+- **Comprehensive Test Suite**: 289+ tests covering all commands, edge cases, and the rule engine.
 
 ## Getting Started
 
@@ -229,6 +230,17 @@ Here are some test commands you can paste into the dashboard's command input to 
 |`service.list` | List running systemd services |
 |`service.status <name>` | Status and logs for a specific service |
 
+### EC2 & Remote Node Commands
+
+| Command | Description |
+|---------|-------------|
+|`ec2.list` | List all connected remote nodes with live metrics and status |
+|`ec2.metrics [id]` | Detailed metric breakdown for a node (CPU, Memory, Disk, Network) |
+|`ec2.info [id]` | AWS metadata and node configuration (Instance Type, AZ, IPs, Uptime) |
+|`ec2.server [start\|stop]` | Check or manage the metrics receiver server |
+
+**Alertable EC2 metrics:** `ec2.cpu.util`, `ec2.mem.util`, `ec2.disk.usage`, `ec2.nodes.online`
+
 ### Utility Commands
 
 | Command | Description |
@@ -264,6 +276,8 @@ nano-dsl/
 ├── requirements.txt         # Python dependencies
 ├── nano_logic/
 │   ├── __init__.py
+│   ├── agent.py             # EC2 telemetry agent (deploy on remote nodes)
+│   ├── receiver.py          # HTTP metrics receiver & NodeStore
 │   ├── dashboard.py         # Main Textual TUI application (Frontend)
 │   ├── daemon.py            # Independent background monitoring process
 │   ├── dsl.py              # DSL parser and executor (Lark-based)
@@ -272,12 +286,22 @@ nano-dsl/
 │   ├── monitoring/
 │   │   ├── __init__.py
 │   │   └── probes.py       # System metric collection functions
+│   ├── plugins/
+│   │   ├── __init__.py      # Plugin registry & discovery
+│   │   ├── base.py          # Plugin base class
+│   │   ├── ec2_plugin.py    # EC2/remote node DSL commands & probes
+│   │   ├── docker_plugin.py # Docker container introspection
+│   │   ├── webhook_plugin.py # Generic webhook alert action
+│   │   ├── discord_plugin.py # Discord webhook action
+│   │   └── slack_plugin.py  # Slack webhook action
 │   └── ui/
 │       ├── __init__.py
 │       └── guide.py        # In-app command guide
 └── tests/
-    ├── __init__.py
-    └── test_dsl.py         # 155+ comprehensive test suite
+    ├── test_dsl.py          # DSL & engine test suite
+    ├── test_ec2_agent.py    # EC2 agent, receiver & integration tests
+    ├── test_plugins.py      # Plugin discovery & routing tests
+    └── test_actions.py      # Webhook action tests
 
 ```
 ## Adding a New Command
@@ -288,6 +312,66 @@ nano-dsl/
 4. Engine — Register the metric in `nano_logic/engine.py` if you want alert support
 5. Guide — Add to `nano_logic/ui/guide.py`
 6. Tests — Add test cases in `tests/test_dsl.py`
+
+---
+
+## EC2 & Remote Node Monitoring
+
+nano-dsl can monitor remote EC2 instances (or any Linux server) in real-time using a lightweight push-based agent architecture.
+
+### Quick Start
+
+**1. Start the receiver** (on your local/central machine — auto-started when DSL loads):
+```bash
+# Standalone mode (optional, the dashboard auto-starts it):
+python -m nano_logic.receiver --port 8080
+```
+
+**2. Deploy the agent on your EC2 instance:**
+```bash
+# On the EC2 instance:
+pip install nano-dsl   # or clone the repo
+
+# Start pushing metrics:
+nano-agent --receiver-url http://<YOUR_IP>:8080/metrics --interval 5
+
+# Or use environment variables:
+export NANO_RECEIVER_URL=http://<YOUR_IP>:8080/metrics
+export NANO_PUSH_INTERVAL=5
+nano-agent
+```
+
+**3. Query from the dashboard:**
+```
+ec2.list               # See all connected nodes
+ec2.metrics            # Detailed metrics for the latest node
+ec2.metrics i-abc123   # Metrics for a specific instance
+ec2.info               # AWS metadata (Instance Type, AZ, IPs)
+```
+
+**4. Set alerts on remote metrics:**
+```
+alert ec2.cpu.util > 80 -> webhook
+alert ec2.mem.util > 90 -> discord
+alert ec2.disk.usage > 85 -> log
+```
+
+### Agent Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NANO_RECEIVER_URL` | `http://localhost:8080/metrics` | Receiver endpoint URL |
+| `NANO_PUSH_INTERVAL` | `5` | Push interval in seconds |
+| `NANO_NODE_ID` | Auto (IMDSv2 or hostname) | Override node identifier |
+| `NANO_AUTH_TOKEN` | None | Optional auth token for push/pull |
+
+### AWS EC2 Auto-Detection
+
+When running on EC2, the agent automatically probes [IMDSv2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html) for:
+- Instance ID, Instance Type, Availability Zone, Region
+- Public and Private IPv4 addresses
+
+If not on EC2, it gracefully falls back to local hostname and platform info.
 
 ---
 
