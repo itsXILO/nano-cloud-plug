@@ -518,7 +518,11 @@ class WebServer:
 
         ConfiguredHandler.node_store = self.store
 
-        self._server = ThreadingHTTPServer((self.host, self.port), ConfiguredHandler)
+        class ReusableThreadingServer(ThreadingHTTPServer):
+            allow_reuse_address = True
+            daemon_threads = True
+
+        self._server = ReusableThreadingServer((self.host, self.port), ConfiguredHandler)
         self._thread: threading.Thread | None = None
         self._is_running = False
 
@@ -590,7 +594,16 @@ def main() -> None:
         get_or_start_receiver()
         print("📡 Telemetry receiver active on http://0.0.0.0:8080/metrics")
 
-    server = WebServer(host=args.host, port=args.port)
+    try:
+        server = WebServer(host=args.host, port=args.port)
+    except OSError as err:
+        if getattr(err, "errno", None) == 98 or "address already in use" in str(err).lower():
+            print(f"❌ Error: Port {args.port} is already in use by another process or container.", file=sys.stderr)
+            print("👉 Try running on a different port, for example:", file=sys.stderr)
+            print(f"   PYTHONPATH=. ./venv/bin/python -m nano_logic.web --port {args.port + 50}\n", file=sys.stderr)
+            sys.exit(1)
+        raise
+
     print("=" * 64)
     print("  🚀 nano-dsl Web Observability Dashboard")
     print(f"  🌐 URL: http://{args.host if args.host != '0.0.0.0' else 'localhost'}:{args.port}")
