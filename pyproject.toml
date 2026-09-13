@@ -22,9 +22,13 @@ dev = ["pytest", "mypy", "ruff"]
 nano-dsl = "nano_logic.dashboard:main"
 nano-agent = "nano_logic.agent:main"
 nano-receiver = "nano_logic.receiver:main"
+nano-web = "nano_logic.web:main"
 
 [tool.setuptools.packages.find]
 include = ["nano_logic*"]
+
+[tool.setuptools.package-data]
+"nano_logic.ui.web" = ["*"]
 
 [tool.ruff]
 line-length = 110

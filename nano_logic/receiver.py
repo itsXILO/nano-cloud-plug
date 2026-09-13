@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Optional
+from typing import Any
 
 from nano_logic.logging_config import configure_logging
 
@@ -59,7 +59,7 @@ class NodeStore:
             }
         return node_id
 
-    def get_node(self, node_id: str) -> Optional[dict[str, Any]]:
+    def get_node(self, node_id: str) -> dict[str, Any] | None:
         """Return a copy of a single node's data or None."""
         with self._lock:
             node = self._nodes.get(node_id)
@@ -72,7 +72,7 @@ class NodeStore:
         nodes.sort(key=lambda n: n.get("last_seen", 0.0), reverse=True)
         return nodes
 
-    def get_node_status(self, node: dict[str, Any], now: Optional[float] = None) -> str:
+    def get_node_status(self, node: dict[str, Any], now: float | None = None) -> str:
         """Classify node status as 'online', 'stale', or 'offline'."""
         if now is None:
             now = time.time()
@@ -84,7 +84,7 @@ class NodeStore:
             return "stale"
         return "offline"
 
-    def get_metric(self, metric_name: str, node_id: Optional[str] = None) -> Optional[float]:
+    def get_metric(self, metric_name: str, node_id: str | None = None) -> float | None:
         """Fetch a metric value. If node_id is omitted, checks the most recently active online node."""
         with self._lock:
             if node_id:
@@ -128,7 +128,7 @@ class MetricsHTTPHandler(BaseHTTPRequestHandler):
     """HTTP request handler for receiving pushed metrics."""
 
     store: NodeStore = GLOBAL_NODE_STORE
-    expected_token: Optional[str] = None
+    expected_token: str | None = None
 
     def log_message(self, format: str, *args: Any) -> None:
         # Suppress verbose standard access logs; route errors to logger
@@ -212,8 +212,8 @@ class ReceiverServer:
         self,
         host: str = "0.0.0.0",
         port: int = 8080,
-        store: Optional[NodeStore] = None,
-        auth_token: Optional[str] = None,
+        store: NodeStore | None = None,
+        auth_token: str | None = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -228,7 +228,7 @@ class ReceiverServer:
         CustomHandler.expected_token = self.auth_token
 
         self._server = ThreadingHTTPServer((self.host, self.port), CustomHandler)
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._is_running = False
 
     def start_background(self) -> None:
@@ -256,13 +256,13 @@ class ReceiverServer:
         return self._is_running
 
 
-_ACTIVE_SERVER: Optional[ReceiverServer] = None
+_ACTIVE_SERVER: ReceiverServer | None = None
 
 
 def get_or_start_receiver(
     host: str = "0.0.0.0",
     port: int = 8080,
-    store: Optional[NodeStore] = None,
+    store: NodeStore | None = None,
 ) -> ReceiverServer:
     """Get the active receiver server or start one in the background."""
     global _ACTIVE_SERVER
@@ -272,7 +272,7 @@ def get_or_start_receiver(
     return _ACTIVE_SERVER
 
 
-def get_active_server() -> Optional[ReceiverServer]:
+def get_active_server() -> ReceiverServer | None:
     return _ACTIVE_SERVER
 
 

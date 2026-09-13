@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from nano_logic.plugins.base import PluginBase
 from nano_logic.receiver import (
@@ -19,7 +19,7 @@ from nano_logic.receiver import (
 )
 
 
-def _format_ago(timestamp: float, now: Optional[float] = None) -> str:
+def _format_ago(timestamp: float, now: float | None = None) -> str:
     if now is None:
         now = time.time()
     diff = max(0.0, now - timestamp)
@@ -47,7 +47,7 @@ class EC2Plugin(PluginBase):
     name = "ec2"
     description = "Monitor live metrics from remote EC2 instances and nodes"
 
-    def __init__(self, store: Optional[NodeStore] = None) -> None:
+    def __init__(self, store: NodeStore | None = None) -> None:
         self.store = store or GLOBAL_NODE_STORE
 
         self.command_handlers = {
@@ -98,7 +98,7 @@ class EC2Plugin(PluginBase):
             meta = n.get("metadata", {})
             metrics = n.get("metrics", {})
             status = self.store.get_node_status(n, now=now).upper()
-            status_badge = f"[ONLINE]" if status == "ONLINE" else f"[{status}]"
+            status_badge = "[ONLINE]" if status == "ONLINE" else f"[{status}]"
 
             ip = meta.get("public_ip") or meta.get("local_ip") or "-"
             cpu = f"{metrics.get('cpu.util', 0.0):.1f}%" if "cpu.util" in metrics else "-"
@@ -115,7 +115,7 @@ class EC2Plugin(PluginBase):
         lines.append(f"Total: {len(nodes)} node(s) | Online: {online_count}")
         return "\n".join(lines)
 
-    def _resolve_target_node(self, children: tuple) -> Optional[dict[str, Any]]:
+    def _resolve_target_node(self, children: tuple) -> dict[str, Any] | None:
         nodes = self.store.list_nodes()
         if not nodes:
             return None

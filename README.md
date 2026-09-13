@@ -4,6 +4,7 @@ A lightweight terminal-based system monitoring dashboard with a custom DSL for q
 
 ## Features
 
+- **Web Observability Dashboard**: A Portainer- and Grafana-inspired web interface (`nano-web`) with real-time telemetry graphs, per-core CPU bars, Docker container & image manager, EC2 fleet explorer, active alert monitor, and zero external Python dependencies.
 - **Custom DSL**: Query various system metrics (CPU, Memory, Disk, Network, Sensors, Docker, Services, EC2/Cloud) with simple, intuitive commands.
 - **45+ DSL Commands**: 11 metric categories covering CPU, Memory, Disk, GPU, Processes, Network, System, Sensors, Docker, Services, and EC2/Cloud.
 - **EC2 & Remote Node Monitoring**: Deploy a lightweight agent on EC2 instances that pushes live telemetry to a central receiver. Query remote metrics with `ec2.list`, `ec2.metrics`, `ec2.info`, and set alerts like `alert ec2.cpu.util > 80 -> webhook`.
@@ -15,7 +16,7 @@ A lightweight terminal-based system monitoring dashboard with a custom DSL for q
 - **Command History**: Cycle through previously used commands using the Up and Down arrow keys.
 - **Active Rules Panel**: Dedicated UI component to monitor all running alerts at a glance.
 - **Utility Commands**: Built-in `help`, `rules`, `status`, `clear`, `history`, and `guide` commands for easier navigation.
-- **Comprehensive Test Suite**: 289+ tests covering all commands, edge cases, and the rule engine.
+- **Comprehensive Test Suite**: 304+ tests covering all commands, web endpoints, edge cases, and the rule engine.
 
 ## Getting Started
 
@@ -278,6 +279,7 @@ nano-dsl/
 │   ├── __init__.py
 │   ├── agent.py             # EC2 telemetry agent (deploy on remote nodes)
 │   ├── receiver.py          # HTTP metrics receiver & NodeStore
+│   ├── web.py               # Web Observability server & REST API
 │   ├── dashboard.py         # Main Textual TUI application (Frontend)
 │   ├── daemon.py            # Independent background monitoring process
 │   ├── dsl.py              # DSL parser and executor (Lark-based)
@@ -296,10 +298,16 @@ nano-dsl/
 │   │   └── slack_plugin.py  # Slack webhook action
 │   └── ui/
 │       ├── __init__.py
-│       └── guide.py        # In-app command guide
+│       ├── guide.py        # In-app command guide
+│       └── web/            # Web Dashboard frontend (HTML/CSS/JS)
+│           ├── index.html
+│           ├── dashboard.css
+│           └── dashboard.js
 └── tests/
     ├── test_dsl.py          # DSL & engine test suite
     ├── test_ec2_agent.py    # EC2 agent, receiver & integration tests
+    ├── test_web.py          # Web dashboard & REST API tests
+    ├── test_docker.py       # Docker probe tests
     ├── test_plugins.py      # Plugin discovery & routing tests
     └── test_actions.py      # Webhook action tests
 
@@ -312,6 +320,52 @@ nano-dsl/
 4. Engine — Register the metric in `nano_logic/engine.py` if you want alert support
 5. Guide — Add to `nano_logic/ui/guide.py`
 6. Tests — Add test cases in `tests/test_dsl.py`
+
+---
+
+## Web Observability Dashboard (Portainer & Grafana Style)
+
+nano-dsl includes a modern, high-performance web dashboard inspired by Portainer and Grafana for visual, real-time observability across your host system, Docker daemon, EC2 fleet, and alert rules.
+
+### Key Capabilities
+
+- 📊 **Overview Dashboard**: High-level KPI summary cards (CPU %, RAM %, Disk %, Docker containers count, EC2 nodes count, firing alert rules) paired with real-time history charts.
+- ⚡ **System Metrics Explorer**: Real-time per-core CPU utilization cards, load averages (1m, 5m, 15m), memory & swap breakdown, disk partition storage progress bars, network traffic throughput & active sockets, hardware sensors (temperatures, battery), and top processes by CPU and Memory.
+- 🐳 **Docker Engine View (Portainer-Style)**: Live container cards and interactive searchable data table (State badges, container names, image tags, IDs, port mappings, status), Docker images explorer, and daemon metadata.
+- ☁️ **EC2 & Remote Fleet Grid**: Multi-node telemetry cards displaying IMDSv2 metadata (Instance ID, Type, AZ, Public/Private IPs), online/stale/offline status pills, and pushed metrics.
+- 🚨 **Alert Rules Console**: Real-time evaluation matrix showing each rule's current target metric value against thresholds (Normal vs Alerting), action targets (`log`, `slack`, `discord`, `webhook`), and a live streaming alert history log.
+- 💻 **TUI Execution Isolation**: Command and script execution remains strictly inside the terminal TUI (`nano-dsl`) for local safety and process isolation, with an interactive syntax guide built into the web UI.
+- ⚡ **Zero External Dependencies**: Built entirely with Python's standard library `http.server.ThreadingHTTPServer` and modern vanilla HTML5/CSS/JS.
+
+### Launching the Web Dashboard
+
+**Option A — Standalone CLI:**
+```bash
+nano-web --port 5000
+# or
+python -m nano_logic.web --port 5000
+```
+Open [http://localhost:5000](http://localhost:5000) in your browser.
+
+**Option B — Together with the TUI:**
+```bash
+nano-dsl --web
+# Launches the TUI in your terminal and starts the web dashboard in the background!
+```
+
+### REST API Endpoints
+
+The web server exposes clean REST endpoints queryable by any HTTP client:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | `GET` | Portainer / Grafana style Web UI |
+| `/health` | `GET` | Service health status |
+| `/api/v1/overview` | `GET` | Consolidated high-speed telemetry snapshot |
+| `/api/v1/metrics` | `GET` | Host system metrics, per-core CPU, disk partitions, sensors |
+| `/api/v1/rules` | `GET` | Active alert rules, evaluation status, and recent alert logs |
+| `/api/v1/docker` | `GET` | Docker daemon state, container list, stats, and images |
+| `/api/v1/nodes` | `GET` | Remote EC2 / agent nodes from `NodeStore` |
 
 ---
 

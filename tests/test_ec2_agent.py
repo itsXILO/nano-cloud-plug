@@ -1,7 +1,6 @@
 """Tests for EC2 telemetry agent, metrics receiver, and DSL integration."""
 from __future__ import annotations
 
-import json
 import time
 from unittest.mock import MagicMock, patch
 
@@ -13,10 +12,9 @@ from nano_logic.agent import (
     collect_metrics,
     push_metrics,
 )
-from nano_logic.dsl import execute_command, parse_command
+from nano_logic.dsl import execute_command
 from nano_logic.engine import ACTIVE_RULES, evaluate_active_rules
 from nano_logic.models import Rule
-from nano_logic.plugins.ec2_plugin import EC2Plugin
 from nano_logic.receiver import (
     GLOBAL_NODE_STORE,
     NodeStore,
@@ -67,7 +65,6 @@ def test_node_store_update_and_get():
 
 def test_node_store_status_classification():
     store = NodeStore()
-    now = 1000.0
     payload = {
         "node_id": "test-node",
         "metrics": {"cpu.util": 10.0},

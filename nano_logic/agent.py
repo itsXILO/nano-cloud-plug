@@ -13,7 +13,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Optional
+from typing import Any
 
 import psutil
 
@@ -26,7 +26,7 @@ IMDS_METADATA_BASE = "http://169.254.169.254/latest/meta-data"
 IMDS_TIMEOUT = 1.0  # seconds
 
 
-def _fetch_imds_token() -> Optional[str]:
+def _fetch_imds_token() -> str | None:
     """Acquire an IMDSv2 session token from AWS metadata service."""
     try:
         req = urllib.request.Request(
@@ -42,7 +42,7 @@ def _fetch_imds_token() -> Optional[str]:
     return None
 
 
-def _fetch_imds_item(item_path: str, token: str) -> Optional[str]:
+def _fetch_imds_item(item_path: str, token: str) -> str | None:
     """Fetch an item from IMDSv2 using the session token."""
     try:
         url = f"{IMDS_METADATA_BASE}/{item_path}"
@@ -142,7 +142,7 @@ def collect_metrics() -> dict[str, float]:
     return metrics
 
 
-def build_payload(node_id: Optional[str] = None, metadata: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def build_payload(node_id: str | None = None, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     """Construct the full JSON telemetry payload."""
     if metadata is None:
         metadata = collect_ec2_metadata()
@@ -162,7 +162,7 @@ def build_payload(node_id: Optional[str] = None, metadata: Optional[dict[str, An
 def push_metrics(
     receiver_url: str,
     payload: dict[str, Any],
-    auth_token: Optional[str] = None,
+    auth_token: str | None = None,
     timeout: float = 5.0,
 ) -> bool:
     """POST payload to receiver endpoint. Returns True on success, False on failure."""
@@ -195,8 +195,8 @@ def push_metrics(
 def run_agent(
     receiver_url: str,
     interval: float = 5.0,
-    node_id: Optional[str] = None,
-    auth_token: Optional[str] = None,
+    node_id: str | None = None,
+    auth_token: str | None = None,
     oneshot: bool = False,
 ) -> None:
     """Main agent execution loop."""
