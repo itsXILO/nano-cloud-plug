@@ -47,5 +47,5 @@ import sys
 _main_spec = getattr(sys.modules.get("__main__"), "__spec__", None)
 _main_name = getattr(_main_spec, "name", "") if _main_spec else ""
 
-if _main_name not in ("nano_logic.receiver", "nano_logic.agent"):
+if _main_name not in ("nano_logic.receiver", "nano_logic.agent", "nano_logic.cli"):
     discover_plugins()
