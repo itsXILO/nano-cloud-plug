@@ -87,6 +87,20 @@ def _print_result(result: str | Rule | StopRule | None) -> None:
         print(f"{DIM}No output{RESET}")
 
 
+def _probe_receiver(port: int = 8080) -> dict | None:
+    """Probe a receiver's /health endpoint. Returns parsed JSON or None."""
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"http://localhost:{port}/health", timeout=2) as resp:
+            if resp.status == 200:
+                return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        pass
+    return None
+
+
 def _print_status() -> None:
     """Print current receiver and rules status."""
     from nano_logic.receiver import get_active_server
@@ -98,6 +112,13 @@ def _print_status() -> None:
         print(f"{GREEN}📡 Receiver: ACTIVE on http://{server.host}:{server.port}{RESET}")
         print(f"   Nodes: {node_count} online / {total} total")
     else:
+        # Try probing common ports for an external receiver
+        for port in (8080, 8081):
+            health = _probe_receiver(port)
+            if health:
+                print(f"{GREEN}📡 Receiver: ACTIVE (external) on http://localhost:{port}{RESET}")
+                print(f"   Nodes: {health.get('nodes_online', '?')} online / {health.get('nodes_total', '?')} total")
+                return
         print(f"{YELLOW}📡 Receiver: NOT RUNNING{RESET}")
 
     if ACTIVE_RULES:
@@ -191,7 +212,14 @@ def main() -> None:
             server = get_or_start_receiver(port=args.receiver_port)
             print(f"{GREEN}📡 Metrics receiver started on http://0.0.0.0:{args.receiver_port}{RESET}")
         except OSError:
-            print(f"{YELLOW}⚠️  Could not start receiver on port {args.receiver_port} (already in use){RESET}")
+            # Port is taken — check if it's already our receiver
+            health = _probe_receiver(args.receiver_port)
+            if health:
+                print(f"{GREEN}📡 Receiver already active on port {args.receiver_port} "
+                      f"({health.get('nodes_online', 0)} nodes online){RESET}")
+            else:
+                print(f"{YELLOW}⚠️  Port {args.receiver_port} is in use by another service."
+                      f" Try: --receiver-port {args.receiver_port + 1}{RESET}")
 
     # Optionally start web dashboard
     if args.web:
