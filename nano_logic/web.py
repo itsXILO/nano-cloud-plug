@@ -313,8 +313,35 @@ def get_docker_payload() -> dict[str, Any]:
 
 def get_nodes_payload(store: NodeStore | None = None) -> dict[str, Any]:
     """Collect EC2 and remote node telemetry from the NodeStore."""
+    is_custom_store = store is not None
     ns = store or GLOBAL_NODE_STORE
+
+    # If using default GLOBAL_NODE_STORE, query active Receiver on port 8080 to sync live nodes
+    if not is_custom_store:
+        receiver_port = int(os.environ.get("NANO_RECEIVER_PORT", "8080"))
+        receiver_url = f"http://localhost:{receiver_port}/metrics"
+        try:
+            import urllib.request
+            req = urllib.request.Request(receiver_url, headers={"User-Agent": "nano-web-dashboard"})
+            with urllib.request.urlopen(req, timeout=1.0) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    remote_nodes = data.get("nodes", [])
+                    if isinstance(remote_nodes, list):
+                        for n in remote_nodes:
+                            if isinstance(n, dict):
+                                ns.update_node({
+                                    "node_id": n.get("node_id"),
+                                    "node_type": n.get("node_type", "ec2"),
+                                    "timestamp": n.get("client_timestamp"),
+                                    "metadata": n.get("metadata", {}),
+                                    "metrics": n.get("metrics", {}),
+                                })
+        except Exception:
+            pass
+
     nodes = ns.list_nodes()
+
     now = time.time()
 
     enriched_nodes = []
