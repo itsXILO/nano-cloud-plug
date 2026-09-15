@@ -227,7 +227,11 @@ class ReceiverServer:
         CustomHandler.store = self.store
         CustomHandler.expected_token = self.auth_token
 
-        self._server = ThreadingHTTPServer((self.host, self.port), CustomHandler)
+        class ReusableThreadingServer(ThreadingHTTPServer):
+            allow_reuse_address = True
+            daemon_threads = True
+
+        self._server = ReusableThreadingServer((self.host, self.port), CustomHandler)
         self._thread: threading.Thread | None = None
         self._is_running = False
 
@@ -279,6 +283,7 @@ def get_active_server() -> ReceiverServer | None:
 def main() -> None:
     """CLI entrypoint to run the standalone receiver server."""
     import argparse
+    import urllib.request
 
     parser = argparse.ArgumentParser(description="nano-dsl Metrics Receiver Server")
     parser.add_argument("--host", default=os.environ.get("NANO_RECEIVER_HOST", "0.0.0.0"), help="Bind host")
@@ -295,7 +300,32 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    server = ReceiverServer(host=args.host, port=args.port, auth_token=args.token)
+    try:
+        server = ReceiverServer(host=args.host, port=args.port, auth_token=args.token)
+    except OSError as err:
+        if getattr(err, "errno", None) == 98 or "already in use" in str(err).lower():
+            # Check if an existing receiver is answering
+            check_host = "localhost" if args.host == "0.0.0.0" else args.host
+            is_our_receiver = False
+            try:
+                with urllib.request.urlopen(f"http://{check_host}:{args.port}/health", timeout=2) as resp:
+                    if resp.status == 200:
+                        is_our_receiver = True
+            except Exception:
+                pass
+
+            if is_our_receiver:
+                print(f"📡 nano-dsl Metrics Receiver is ALREADY ACTIVE and running on http://{args.host}:{args.port}")
+                print("ℹ️  Note: When 'nano-web' or 'nano-dsl' is running, the receiver automatically starts in the background.")
+                print("👉 You don't need to run this command — you can push metrics directly:")
+                print(f"   PYTHONPATH=. ./venv/bin/python -m nano_logic.agent --receiver-url http://localhost:{args.port}/metrics\n")
+                sys.exit(0)
+            else:
+                print(f"❌ Error: Port {args.port} is already in use by another service on your system.", file=sys.stderr)
+                print(f"👉 Try specifying a different port: python -m nano_logic.receiver --port {args.port + 1}\n", file=sys.stderr)
+                sys.exit(1)
+        raise
+
     print(f"📡 nano-dsl Metrics Receiver running on http://{args.host}:{args.port}")
     print("Press Ctrl+C to stop.")
     try:
