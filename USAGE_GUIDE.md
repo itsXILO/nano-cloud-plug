@@ -42,7 +42,7 @@ PYTHONPATH=. ./venv/bin/python -m nano_logic.web --port 5050
 ### **Terminal 4 (Optional) — Start Live Machine Agent**
 ```bash
 cd ~/Projects/Nano-DSL-plugin/nano-dsl
-PYTHONPATH=. ./venv/bin/python -m nano_logic.agent --node-id "my-laptop"
+PYTHONPATH=. ./venv/bin/python -m nano_logic.web --port 5050
 ```
 > 📌 **Note**: Pushes live metrics from your physical host machine alongside the simulated EC2 nodes.
 

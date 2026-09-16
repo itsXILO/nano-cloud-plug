@@ -581,15 +581,48 @@ class WebServer:
 _ACTIVE_WEB_SERVER: WebServer | None = None
 
 
+def _find_free_port(host: str, start_port: int, max_tries: int = 20) -> int:
+    """Return the first TCP port >= start_port that is not already bound.
+
+    Raises RuntimeError if no free port is found within *max_tries* attempts.
+    """
+    import socket as _socket
+
+    for offset in range(max_tries):
+        candidate = start_port + offset
+        try:
+            with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as sock:
+                sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+                sock.bind((host, candidate))
+            return candidate
+        except OSError:
+            continue
+    raise RuntimeError(
+        f"Could not find a free port in range {start_port}–{start_port + max_tries - 1}. "
+        "Kill stale processes or specify a different base port."
+    )
+
+
 def get_or_start_web_server(
     host: str = "0.0.0.0",
     port: int = 5000,
     store: NodeStore | None = None,
 ) -> WebServer:
-    """Get the running web server instance or start one in the background."""
+    """Get the running web server instance or start one in the background.
+
+    If *port* is already occupied the server automatically binds to the next
+    available port so the caller never has to handle EADDRINUSE.
+    """
     global _ACTIVE_WEB_SERVER
     if _ACTIVE_WEB_SERVER is None or not _ACTIVE_WEB_SERVER.is_running:
-        _ACTIVE_WEB_SERVER = WebServer(host=host, port=port, store=store)
+        free_port = _find_free_port(host, port)
+        if free_port != port:
+            logger.warning(
+                "Port %d is in use; web dashboard starting on port %d instead.",
+                port,
+                free_port,
+            )
+        _ACTIVE_WEB_SERVER = WebServer(host=host, port=free_port, store=store)
         _ACTIVE_WEB_SERVER.start_background()
     return _ACTIVE_WEB_SERVER
 
@@ -622,18 +655,23 @@ def main() -> None:
         print("📡 Telemetry receiver active on http://0.0.0.0:8080/metrics")
 
     try:
-        server = WebServer(host=args.host, port=args.port)
-    except OSError as err:
-        if getattr(err, "errno", None) == 98 or "address already in use" in str(err).lower():
-            print(f"❌ Error: Port {args.port} is already in use by another process or container.", file=sys.stderr)
-            print("👉 Try running on a different port, for example:", file=sys.stderr)
-            print(f"   PYTHONPATH=. ./venv/bin/python -m nano_logic.web --port {args.port + 50}\n", file=sys.stderr)
-            sys.exit(1)
-        raise
+        actual_port = _find_free_port(args.host, args.port)
+    except RuntimeError as err:
+        print(f"❌ {err}", file=sys.stderr)
+        sys.exit(1)
 
+    if actual_port != args.port:
+        print(
+            f"⚠️  Port {args.port} is already in use. Starting on port {actual_port} instead.",
+            file=sys.stderr,
+        )
+
+    server = WebServer(host=args.host, port=actual_port)
+
+    display_host = args.host if args.host != "0.0.0.0" else "localhost"
     print("=" * 64)
     print("  🚀 nano-dsl Web Observability Dashboard")
-    print(f"  🌐 URL: http://{args.host if args.host != '0.0.0.0' else 'localhost'}:{args.port}")
+    print(f"  🌐 URL: http://{display_host}:{actual_port}")
     print("  💻 TUI command execution remains active via 'nano-dsl'")
     print("=" * 64)
     print("Press Ctrl+C to stop.")

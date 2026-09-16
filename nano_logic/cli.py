@@ -202,6 +202,7 @@ def main() -> None:
         help="Don't auto-start the metrics receiver",
     )
     args = parser.parse_args()
+    os.environ["NANO_RECEIVER_PORT"] = str(args.receiver_port)
 
     # Load persisted alert rules
     load_rules()
